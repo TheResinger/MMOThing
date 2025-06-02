@@ -3,6 +3,7 @@ package server
 import (
 	"log"
 	"net/http"
+	"server/internal/server/objects"
 	"server/pkg/packets"
 )
 
@@ -37,7 +38,7 @@ type ClientInterfacer interface {
 
 // The hub is the central point of communication between all connected clients
 type Hub struct {
-	Clients map[uint64]ClientInterfacer
+	Clients *objects.SharedCollection[ClientInterfacer]
 	// Packets in this channel will be processed by all connected clients except the sender
 	BroastcastChan chan *packets.Packet
 	// Clients in this channel will be registered to the hub
@@ -48,7 +49,7 @@ type Hub struct {
 
 func NewHub() *Hub {
 	return &Hub{
-		Clients:        make(map[uint64]ClientInterfacer),
+		Clients:        objects.NewSharedCollection[ClientInterfacer](),
 		BroastcastChan: make(chan *packets.Packet),
 		RegisterChan:   make(chan ClientInterfacer),
 		UnregisterChan: make(chan ClientInterfacer),
@@ -60,15 +61,15 @@ func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.RegisterChan:
-			client.Initialize(uint64(len(h.Clients)))
+			client.Initialize(h.Clients.Add(client))
 		case client := <-h.UnregisterChan:
-			h.Clients[client.Id()] = nil
+			h.Clients.Remove(client.Id())
 		case packet := <-h.BroastcastChan:
-			for id, client := range h.Clients {
-				if id != packet.SenderId {
+			h.Clients.ForEach(func(clientId uint64, client ClientInterfacer) {
+				if clientId != packet.SenderId {
 					client.ProcessMessage(packet.SenderId, packet.Msg)
 				}
-			}
+			})
 		}
 	}
 }
