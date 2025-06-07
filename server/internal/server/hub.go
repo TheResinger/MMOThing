@@ -7,12 +7,22 @@ import (
 	"server/pkg/packets"
 )
 
+type ClientStateHandler interface {
+	Name() string
+	SetClient(client ClientInterfacer)
+	OnEnter()
+	HandleMessage(senderId uint64, message packets.Msg)
+	OnExit()
+}
+
 type ClientInterfacer interface {
 	Id() uint64
 	ProcessMessage(senderId uint64, message packets.Msg)
 
 	// Sets the clients ID and anything else that needs to be initialized
 	Initialize(id uint64)
+
+	SetState(newState ClientStateHandler)
 
 	// Puts data from this client into the write pump
 	SocketSend(message packets.Msg)
